@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shape Detection Test Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-result {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .test-result.pass {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .test-result.fail {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .summary {
+            background-color: #e7f3ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Shape Detection Test Runner</h1>
+    <button id="runTests">Run All Tests</button>
+    <div id="results"></div>
+    <canvas id="testCanvas"></canvas>
+
+    <script type="module">
+        import { ShapeDetector } from './src/main.js';
+
+        const testImages = {
+            "circle_simple.png": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IndoaXRlIi8+CiAgICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjUwIiBmaWxsPSJibGFjayIvPgo8L3N2Zz4=",
+            "triangle_basic.png": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IndoaXRlIi8+CiAgICA8cG9seWdvbiBwb2ludHM9IjEwMCwzMCAyNSwxNjAgMTc1LDE2MCIgZmlsbD0iYmxhY2siLz4KPC9zdmc+",
+            "rectangle_square.png": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IndoaXRlIi8+CiAgICA8cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiBmaWxsPSJibGFjayIvPgo8L3N2Zz4=",
+        };
+
+        const expectedResults = {
+            "circle_simple.png": { type: "circle", count: 1 },
+            "triangle_basic.png": { type: "triangle", count: 1 },
+            "rectangle_square.png": { type: "rectangle", count: 1 },
+        };
+
+        document.getElementById('runTests').addEventListener('click', async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>Running tests...</h2>';
+            
+            const canvas = document.getElementById('testCanvas');
+            const detector = new ShapeDetector(canvas);
+            
+            let passed = 0;
+            let failed = 0;
+            let totalTime = 0;
+            let resultsHTML = '';
+
+            for (const [imageName, dataUrl] of Object.entries(testImages)) {
+                try {
+                    const response = await fetch(dataUrl);
+                    const blob = await response.blob();
+                    const file = new File([blob], imageName, { type: 'image/svg+xml' });
+                    
+                    const imageData = await detector.loadImage(file);
+                    const result = await detector.detectShapes(imageData);
+                    
+                    const expected = expectedResults[imageName];
+                    const detected = result.shapes.length > 0 ? result.shapes[0].type : 'none';
+                    const isCorrect = result.shapes.length === expected.count && 
+                                     (result.shapes.length === 0 || detected === expected.type);
+                    
+                    totalTime += result.processingTime;
+                    
+                    if (isCorrect) {
+                        passed++;
+                        resultsHTML += `
+                            <div class="test-result pass">
+                                <h3>✓ ${imageName}</h3>
+                                <p>Expected: ${expected.type} (${expected.count}), Detected: ${detected} (${result.shapes.length})</p>
+                                <p>Processing time: ${result.processingTime.toFixed(2)}ms</p>
+                                <p>Confidence: ${result.shapes.length > 0 ? (result.shapes[0].confidence * 100).toFixed(1) + '%' : 'N/A'}</p>
+                            </div>
+                        `;
+                    } else {
+                        failed++;
+                        resultsHTML += `
+                            <div class="test-result fail">
+                                <h3>✗ ${imageName}</h3>
+                                <p>Expected: ${expected.type} (${expected.count}), Detected: ${detected} (${result.shapes.length})</p>
+                                <p>Processing time: ${result.processingTime.toFixed(2)}ms</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    failed++;
+                    resultsHTML += `
+                        <div class="test-result fail">
+                            <h3>✗ ${imageName}</h3>
+                            <p>Error: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            const summaryHTML = `
+                <div class="summary">
+                    <h2>Test Summary</h2>
+                    <p><strong>Passed:</strong> ${passed} / ${passed + failed}</p>
+                    <p><strong>Failed:</strong> ${failed} / ${passed + failed}</p>
+                    <p><strong>Total Processing Time:</strong> ${totalTime.toFixed(2)}ms</p>
+                    <p><strong>Average Processing Time:</strong> ${(totalTime / (passed + failed)).toFixed(2)}ms</p>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = summaryHTML + resultsHTML;
+        });
+    </script>
+</body>
+</html>
+
